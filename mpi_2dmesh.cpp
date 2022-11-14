@@ -387,6 +387,13 @@ sendStridedBuffer(float *srcBuf,
    // srcBuf by the values specificed by srcOffsetColumn, srcOffsetRow.
    //
 
+   MPI_Datatype SendData;
+   MPI_Type_vector(sendHeight, sendWidth, srcWidth, MPI_FLOAT, &SendData);
+   MPI_Type_commit(&SendData);
+
+   int srcOffset =  srcOffsetRow * srcWidth + srcOffsetColumn;
+
+   MPI_Send(srcBuf + srcOffset, 1, SendData, toRank, msgTag, MPI_COMM_WORLD);
 }
 
 void
@@ -408,6 +415,14 @@ recvStridedBuffer(float *dstBuf,
    // at dstOffsetColumn, dstOffsetRow, and that is expectedWidth, expectedHeight in size.
    //
 
+   MPI_Datatype RecvData;
+	MPI_Type_vector(expectedHeight, expectedWidth, dstWidth, MPI_FLOAT, &RecvData);
+	MPI_Type_commit(&RecvData);
+	
+	int dstOffset = dstOffsetRow * dstWidth + dstOffsetColumn;
+	
+	MPI_Recv(dstBuf + dstOffset, 1, RecvData, fromRank, msgTag, MPI_COMM_WORLD, &stat);
+
 }
 
 
@@ -416,7 +431,38 @@ recvStridedBuffer(float *dstBuf,
 // that performs sobel filtering
 // suggest using your cpu code from HW5, no OpenMP parallelism 
 //
+float
+sobel_filtered_pixel(float *s, int i, int j, int ncols, int nrows, float *gx, float *gy)
+{
+   float Gx = 0.0f;
+   float Gy = 0.0f;
 
+   if (i > 0 && i < nrows - 1 && j > 0 && j < ncols - 1){
+      for (int k = 0; k < 3; k++){
+         for (int l = 0; l < 3; l++){
+            int currentRow = (i+k-1)*ncols;
+            int currentCol = j+l-1;
+            Gx += gx[k*3+l] * s[currentRow + currentCol];
+            Gy += gy[k*3+l] * s[currentRow + currentCol];
+         }
+      }
+   }
+
+   return sqrt(Gx*Gx + Gy*Gy);
+}
+
+void
+do_sobel_filtering(float *in, float *out, int ncols, int nrows)
+{
+   float Gx[] = {1.0, 0.0, -1.0, 2.0, 0.0, -2.0, 1.0, 0.0, -1.0};
+   float Gy[] = {1.0, 2.0, 1.0, 0.0, 0.0, 0.0, -1.0, -2.0, -1.0};
+
+   for (int i = 0; i < nrows; i++){
+      for (int j = 0; j < ncols; j++){
+         out[i*ncols + j] = sobel_filtered_pixel(in, i, j, ncols, nrows, Gx, Gy);
+      }
+   }
+}
 
 void
 sobelAllTiles(int myrank, vector < vector < Tile2D > > & tileArray) {
@@ -439,6 +485,7 @@ sobelAllTiles(int myrank, vector < vector < Tile2D > > & tileArray) {
 #endif
          // ADD YOUR CODE HERE
          // to call your sobel filtering code on each tile
+         do_sobel_filtering(t->inputBuffer.data(), t->outputBuffer.data(), t->width, t->height)
          }
       }
    }
