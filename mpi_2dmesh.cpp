@@ -40,7 +40,7 @@
 
 #include "mpi_2dmesh.hpp"  // for AppState and Tile2D class
 
-#define DEBUG_TRACE 0 
+#define DEBUG_TRACE 1 
 
 int
 parseArgs(int ac, char *av[], AppState *as)
@@ -472,12 +472,12 @@ sobelAllTiles(int myrank, vector < vector < Tile2D > > & tileArray) {
          {
 #if 0
             // debug code
-            v1: fill the output buffer with the value of myrank
-                       printf(" sobelAllTiles(): filling the output buffer of size=%d with myrank=%d\n:", t->outputBuffer.size(), myrank);
-            std::fill(t->outputBuffer.begin(), t->outputBuffer.end(), myrank);
+            // v1: fill the output buffer with the value of myrank
+            //            printf(" sobelAllTiles(): filling the output buffer of size=%d with myrank=%d\n:", t->outputBuffer.size(), myrank);
+            //std::fill(t->outputBuffer.begin(), t->outputBuffer.end(), myrank);
 
-            v2. copy the input to the output, umodified
-           std::copy(t->inputBuffer.begin(), t->inputBuffer.end(), t->outputBuffer.begin());
+            // v2. copy the input to the output, umodified
+         //   std::copy(t->inputBuffer.begin(), t->inputBuffer.end(), t->outputBuffer.begin());
 #endif
          // ADD YOUR CODE HERE
          // to call your sobel filtering code on each tile
