@@ -390,10 +390,8 @@ sendStridedBuffer(float *srcBuf,
    MPI_Datatype SendData;
    MPI_Type_vector(sendHeight, sendWidth, srcWidth, MPI_FLOAT, &SendData);
    MPI_Type_commit(&SendData);
-
-   int srcOffset =  srcOffsetRow * srcWidth + srcOffsetColumn;
-
-   MPI_Send(srcBuf + srcOffset, 1, SendData, toRank, msgTag, MPI_COMM_WORLD);
+   int offfset =  srcOffsetRow * srcWidth + srcOffsetColumn;
+   MPI_Send(srcBuf + offset, 1, SendData, toRank, msgTag, MPI_COMM_WORLD);
 }
 
 void
@@ -418,10 +416,8 @@ recvStridedBuffer(float *dstBuf,
    MPI_Datatype RecvData;
 	MPI_Type_vector(expectedHeight, expectedWidth, dstWidth, MPI_FLOAT, &RecvData);
 	MPI_Type_commit(&RecvData);
-	
-	int dstOffset = dstOffsetRow * dstWidth + dstOffsetColumn;
-	
-	MPI_Recv(dstBuf + dstOffset, 1, RecvData, fromRank, msgTag, MPI_COMM_WORLD, &stat);
+   int offset = dstOffsetRow * dstWidth + dstOffsetColumn;
+	MPI_Recv(dstBuf + offset, 1, RecvData, fromRank, msgTag, MPI_COMM_WORLD, &stat);
 
 }
 
@@ -476,12 +472,12 @@ sobelAllTiles(int myrank, vector < vector < Tile2D > > & tileArray) {
          {
 #if 0
             // debug code
-            // v1: fill the output buffer with the value of myrank
-            //            printf(" sobelAllTiles(): filling the output buffer of size=%d with myrank=%d\n:", t->outputBuffer.size(), myrank);
-            //std::fill(t->outputBuffer.begin(), t->outputBuffer.end(), myrank);
+            v1: fill the output buffer with the value of myrank
+                       printf(" sobelAllTiles(): filling the output buffer of size=%d with myrank=%d\n:", t->outputBuffer.size(), myrank);
+            std::fill(t->outputBuffer.begin(), t->outputBuffer.end(), myrank);
 
-            // v2. copy the input to the output, umodified
-         //   std::copy(t->inputBuffer.begin(), t->inputBuffer.end(), t->outputBuffer.begin());
+            v2. copy the input to the output, umodified
+           std::copy(t->inputBuffer.begin(), t->inputBuffer.end(), t->outputBuffer.begin());
 #endif
          // ADD YOUR CODE HERE
          // to call your sobel filtering code on each tile
