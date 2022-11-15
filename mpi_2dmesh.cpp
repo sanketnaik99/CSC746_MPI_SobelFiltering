@@ -390,7 +390,7 @@ sendStridedBuffer(float *srcBuf,
    MPI_Datatype SendData;
    MPI_Type_vector(sendHeight, sendWidth, srcWidth, MPI_FLOAT, &SendData);
    MPI_Type_commit(&SendData);
-   int offfset =  srcOffsetRow * srcWidth + srcOffsetColumn;
+   int offset =  srcOffsetRow * srcWidth + srcOffsetColumn;
    MPI_Send(srcBuf + offset, 1, SendData, toRank, msgTag, MPI_COMM_WORLD);
 }
 
