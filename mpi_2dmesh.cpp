@@ -40,7 +40,7 @@
 
 #include "mpi_2dmesh.hpp"  // for AppState and Tile2D class
 
-#define DEBUG_TRACE 1 
+#define DEBUG_TRACE 0 
 
 int
 parseArgs(int ac, char *av[], AppState *as)
@@ -150,6 +150,13 @@ computeMeshDecomposition(AppState *as, vector < vector < Tile2D > > *tileArray) 
          int width =  as->global_mesh_size[0];
          int height = ylocs[i+1]-ylocs[i];
          Tile2D t = Tile2D(0, ylocs[i], width, height, i);
+
+         // In case of Row Decomposition we add ghost cells to the top and bottom
+         t.ghost_xmin = 0;
+         t.ghost_xmax = width;
+         t.ghost_ymin = i == 0 ? 0 : -1;
+         t.ghost_ymax = i == (ytiles - 1) ? height : height + 1;
+
          tiles.push_back(t);
          tileArray->push_back(tiles);
       }
@@ -176,7 +183,15 @@ computeMeshDecomposition(AppState *as, vector < vector < Tile2D > > *tileArray) 
       {
          int width =  xlocs[i+1]-xlocs[i];
          int height = as->global_mesh_size[1];
+
          Tile2D t = Tile2D(xlocs[i], 0, width, height, i);
+
+         // In case of Column Decomposition we add ghost cells to the top and bottom
+         t.ghost_xmin = i == 0 ? 0 : -1;
+         t.ghost_xmax = i == (ytiles - 1) ? width : width + 1;
+         t.ghost_ymin = 0;
+         t.ghost_ymax = height;
+
          tile_row.push_back(t);
       }
       tileArray->push_back(tile_row);
@@ -221,6 +236,13 @@ computeMeshDecomposition(AppState *as, vector < vector < Tile2D > > *tileArray) 
             width = xlocs[i+1]-xlocs[i];
             height = ylocs[j+1]-ylocs[j];
             Tile2D t = Tile2D(xlocs[i], ylocs[j], width, height, rank++);
+
+            // In case of Tile Decomposition we add ghost cells all around the tile
+            t.ghost_xmin = i == 0 ? 0 : -1;
+            t.ghost_xmax = i == (xtiles - 1) ? width : width + 1;
+            t.ghost_ymin = j == 0 ? 0 : -1;
+            t.ghost_ymax = j == (ytiles - 1) ? height : height + 1;
+         
             tile_row.push_back(t);
          }
          tileArray->push_back(tile_row);
@@ -428,16 +450,16 @@ recvStridedBuffer(float *dstBuf,
 // suggest using your cpu code from HW5, no OpenMP parallelism 
 //
 float
-sobel_filtered_pixel(float *s, int i, int j, int ncols, int nrows, float *gx, float *gy)
+sobel_filtered_pixel(float *s, int i, int j, int ghost_xmin, int ghost_xmax, int ghost_ymin, int ghost_ymax, float *gx, float *gy)
 {
    float Gx = 0.0f;
    float Gy = 0.0f;
 
-   if (i > 0 && i < nrows - 1 && j > 0 && j < ncols - 1){
+   if (i > ghost_ymin && i < ghost_ymax - 1 && j > ghost_xmin && j < ghost_xmax - 1){
       for (int k = 0; k < 3; k++){
          for (int l = 0; l < 3; l++){
-            int currentRow = (i+k-1)*ncols;
-            int currentCol = j+l-1;
+            int currentRow = (i - ghost_ymin + k - 1)* (ghost_xmax - ghost_xmin);
+            int currentCol = j - ghost_xmin + l - 1;
             Gx += gx[k*3+l] * s[currentRow + currentCol];
             Gy += gy[k*3+l] * s[currentRow + currentCol];
          }
@@ -448,14 +470,14 @@ sobel_filtered_pixel(float *s, int i, int j, int ncols, int nrows, float *gx, fl
 }
 
 void
-do_sobel_filtering(float *in, float *out, int ncols, int nrows)
+do_sobel_filtering(float *in, float *out, int ncols, int nrows, int ghost_xmin, int ghost_xmax, int ghost_ymin, int ghost_ymax)
 {
    float Gx[] = {1.0, 0.0, -1.0, 2.0, 0.0, -2.0, 1.0, 0.0, -1.0};
    float Gy[] = {1.0, 2.0, 1.0, 0.0, 0.0, 0.0, -1.0, -2.0, -1.0};
 
    for (int i = 0; i < nrows; i++){
       for (int j = 0; j < ncols; j++){
-         out[i*ncols + j] = sobel_filtered_pixel(in, i, j, ncols, nrows, Gx, Gy);
+         out[i*ncols + j] = sobel_filtered_pixel(in, i, j, ghost_xmin, ghost_xmax, ghost_ymin, ghost_ymax, Gx, Gy);
       }
    }
 }
@@ -481,7 +503,7 @@ sobelAllTiles(int myrank, vector < vector < Tile2D > > & tileArray) {
 #endif
          // ADD YOUR CODE HERE
          // to call your sobel filtering code on each tile
-         do_sobel_filtering(t->inputBuffer.data(), t->outputBuffer.data(), t->width, t->height);
+         do_sobel_filtering(t->inputBuffer.data(), t->outputBuffer.data(), t->width, t->height, t->ghost_xmin, t->ghost_xmax, t->ghost_ymin, t->ghost_ymax);
          }
       }
    }
@@ -500,20 +522,23 @@ scatterAllTiles(int myrank, vector < vector < Tile2D > > & tileArray, float *s, 
       {  
          Tile2D *t = &(tileArray[row][col]);
 
+         int width = t->ghost_xmax - t->ghost_xmin;
+         int height = t->ghost_ymax - t->ghost_ymin;
+
          if (myrank != 0 && t->tileRank == myrank)
          {
             int fromRank=0;
 
             // receive a tile's buffer 
-            t->inputBuffer.resize(t->width*t->height);
+            t->inputBuffer.resize(widght*height);
             t->outputBuffer.resize(t->width*t->height);
 #if DEBUG_TRACE
             printf("scatterAllTiles() receive side:: t->tileRank=%d, myrank=%d, t->inputBuffer->size()=%d, t->outputBuffersize()=%d \n", t->tileRank, myrank, t->inputBuffer.size(), t->outputBuffer.size());
 #endif
 
-            recvStridedBuffer(t->inputBuffer.data(), t->width, t->height,
+            recvStridedBuffer(t->inputBuffer.data(), width, height,
                   0, 0,  // offset into the tile buffer: we want the whole thing
-                  t->width, t->height, // how much data coming from this tile
+                  width, height, // how much data coming from this tile
                   fromRank, myrank); 
          }
          else if (myrank == 0)
@@ -525,13 +550,13 @@ scatterAllTiles(int myrank, vector < vector < Tile2D > > & tileArray, float *s, 
 
                sendStridedBuffer(s, // ptr to the buffer to send
                      global_width, global_height,  // size of the src buffer
-                     t->xloc, t->yloc, // offset into the send buffer
-                     t->width, t->height,  // size of the buffer to send,
+                     t->xloc + t->ghost_xmin, t->yloc + t->ghost_ymin, // offset into the send buffer
+                     width, height,  // size of the buffer to send,
                      myrank, t->tileRank);
             }
             else // rather then have rank 0 send to rank 0, just do a strided copy into a tile's input buffer
             {
-               t->inputBuffer.resize(t->width*t->height);
+               t->inputBuffer.resize(width*height);
                t->outputBuffer.resize(t->width*t->height);
 
                off_t s_offset=0, d_offset=0;
