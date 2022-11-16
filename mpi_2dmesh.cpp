@@ -559,12 +559,13 @@ scatterAllTiles(int myrank, vector < vector < Tile2D > > & tileArray, float *s, 
                t->inputBuffer.resize(width*height);
                t->outputBuffer.resize(t->width*t->height);
 
-               off_t s_offset=0, d_offset=0;
+               off_t s_offset= (t->xloc + t->ghost_xmin) * (global_width) + t->yloc + t->ghost_ymin; 
+               off_t d_offset=0;
                float *d = t->inputBuffer.data();
 
-               for (int j=0;j<t->height;j++, s_offset+=global_width, d_offset+=t->width)
+               for (int j=0;j<height;j++, s_offset+=global_width, d_offset+=width)
                {
-                  memcpy((void *)(d+d_offset), (void *)(s+s_offset), sizeof(float)*t->width);
+                  memcpy((void *)(d+d_offset), (void *)(s+s_offset), sizeof(float)*width);
                }
             }
          }
