@@ -42,6 +42,9 @@
 
 #define DEBUG_TRACE 0 
 
+int messageCount = 0;
+double dataMovement = 0.0;
+
 int
 parseArgs(int ac, char *av[], AppState *as)
 {
@@ -414,6 +417,8 @@ sendStridedBuffer(float *srcBuf,
    MPI_Type_commit(&SendData);
    int offset =  srcOffsetRow * srcWidth + srcOffsetColumn;
    MPI_Send(srcBuf + offset, 1, SendData, toRank, msgTag, MPI_COMM_WORLD);
+   messageCount++;
+   dataMovement += sendWidth * sendHeight * sizeof(float);
 }
 
 void
@@ -440,7 +445,8 @@ recvStridedBuffer(float *dstBuf,
 	MPI_Type_commit(&RecvData);
    int offset = dstOffsetRow * dstWidth + dstOffsetColumn;
 	MPI_Recv(dstBuf + offset, 1, RecvData, fromRank, msgTag, MPI_COMM_WORLD, &stat);
-
+   messageCount++;
+   dataMovement += expectedWidth * expectedHeight * sizeof(float);
 }
 
 
@@ -756,6 +762,8 @@ int main(int ac, char *av[]) {
       printf("\tScatter time:\t%6.4f (ms) \n", elapsed_scatter_time*1000.0);
       printf("\tSobel time:\t%6.4f (ms) \n", elapsed_sobel_time*1000.0);
       printf("\tGather time:\t%6.4f (ms) \n", elapsed_gather_time*1000.0);
+      printf("\tMessage Count:\t%i \n", messageCount );
+      printf("\tData Movement:\t%6.4f \n", dataMovement); 
    }
 
    MPI_Finalize();
